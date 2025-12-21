@@ -1,5 +1,9 @@
 .PHONY: init deploy deploy-primary deploy-dr destroy destroy-dr destroy-primary status lint cost clean help
 
+# Load .env if exists
+-include .env
+export
+
 # Configuration
 INFRA_DIR := infrastructure
 PRIMARY_DIR := $(INFRA_DIR)/environments/primary
