@@ -1,0 +1,72 @@
+# CloudPort - Enterprise AWS Migration Configuration
+# Copy this file to environments/primary/terraform.tfvars and environments/dr/terraform.tfvars
+
+# Project Configuration
+project_name = "cloudport"
+environment  = "demo"
+
+# Region Configuration
+primary_region = "us-east-1"
+dr_region      = "us-west-2"
+
+# Network Configuration
+vpc_configs = {
+  prod = {
+    cidr_block  = "10.1.0.0/16"
+    environment = "production"
+  }
+  dev = {
+    cidr_block  = "10.2.0.0/16"
+    environment = "development"
+  }
+  shared = {
+    cidr_block  = "10.3.0.0/16"
+    environment = "shared-services"
+  }
+  onprem = {
+    cidr_block  = "10.0.0.0/16"
+    environment = "on-premises-simulation"
+  }
+}
+
+# Feature Flags
+enable_dr               = true
+enable_security_inspection = true
+enable_storage_gateway  = true
+enable_datasync         = true
+enable_transfer_family  = true
+
+# Application Configuration
+app_name         = "cloudport-app"
+app_container_port = 80
+
+# Aurora Configuration
+aurora_engine_version    = "15.4"
+aurora_min_capacity     = 0.5
+aurora_max_capacity     = 4
+aurora_deletion_protection = false  # Set to true for production
+
+# Suricata Configuration
+suricata_rules_url = "https://rules.emergingthreats.net/open/suricata-5.0/emerging.rules.tar.gz"
+
+# Transfer Family Configuration
+sftp_users = {
+  partner1 = {
+    public_key = ""  # Add SSH public key here
+    home_directory = "/partner1"
+  }
+}
+
+# Tags
+common_tags = {
+  Project     = "cloudport"
+  Environment = "demo"
+  ManagedBy   = "terraform"
+  Purpose     = "enterprise-migration-demo"
+}
+
+# Optional: Domain Configuration (for Route 53)
+# domain_name = "cloudport.example.com"
+
+# Optional: Notification Configuration
+# alert_email = "ops@example.com"
