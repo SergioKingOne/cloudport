@@ -1,0 +1,565 @@
+# CloudPort Enterprise AWS Migration Architecture
+# Generated with diagram-as-code (awsdac)
+# https://github.com/awslabs/diagram-as-code
+
+Diagram:
+  DefinitionFiles:
+    - Type: URL
+      Url: "https://raw.githubusercontent.com/awslabs/diagram-as-code/main/definitions/definition-for-aws-icons-light.yaml"
+
+  Resources:
+    Canvas:
+      Type: AWS::Diagram::Canvas
+      Direction: vertical
+      Children:
+        - GlobalLayer
+        - AWSCloud
+
+    # ==========================================================================
+    # Global Layer (Internet + Global Services)
+    # ==========================================================================
+    GlobalLayer:
+      Type: AWS::Diagram::HorizontalStack
+      Direction: horizontal
+      Align: center
+      Children:
+        - User
+        - Route53
+        - GlobalAccelerator
+
+    User:
+      Type: AWS::Diagram::Resource
+      Preset: User
+
+    Route53:
+      Type: AWS::Route53::HostedZone
+      Title: "Route 53\nFailover DNS"
+
+    GlobalAccelerator:
+      Type: AWS::GlobalAccelerator::Accelerator
+      Title: "Global Accelerator\n(Static IPs)"
+
+    # ==========================================================================
+    # AWS Cloud Container
+    # ==========================================================================
+    AWSCloud:
+      Type: AWS::Diagram::Cloud
+      Preset: AWSCloudNoLogo
+      Direction: horizontal
+      Children:
+        - PrimaryRegion
+        - DRRegion
+
+    # ==========================================================================
+    # PRIMARY REGION (us-east-1)
+    # ==========================================================================
+    PrimaryRegion:
+      Type: AWS::Diagram::Resource
+      Title: "us-east-1 (Primary)"
+      Direction: vertical
+      FillColor: "rgba(255, 255, 255, 0)"
+      Children:
+        - PrimaryVPCs
+        - TransitGatewaySection
+
+    PrimaryVPCs:
+      Type: AWS::Diagram::HorizontalStack
+      Direction: horizontal
+      Children:
+        - ProdVPC
+        - DevVPC
+        - SharedVPC
+        - OnPremVPC
+
+    # --------------------------------------------------------------------------
+    # Production VPC (10.1.0.0/16)
+    # --------------------------------------------------------------------------
+    ProdVPC:
+      Type: AWS::EC2::VPC
+      Title: "Production VPC\n10.1.0.0/16"
+      Direction: vertical
+      Children:
+        - ProdIGW
+        - ProdPublicSubnets
+        - ProdPrivateSubnets
+
+    ProdIGW:
+      Type: AWS::EC2::InternetGateway
+      Title: "IGW"
+
+    ProdPublicSubnets:
+      Type: AWS::Diagram::HorizontalStack
+      Direction: horizontal
+      Children:
+        - ProdPublicSubnet1
+        - ProdPublicSubnet2
+
+    ProdPublicSubnet1:
+      Type: AWS::EC2::Subnet
+      Preset: PublicSubnet
+      Title: "Public Subnet AZ1\n10.1.0.0/24"
+      Direction: vertical
+      Children:
+        - ProdNATGW
+        - ProdALB
+
+    ProdPublicSubnet2:
+      Type: AWS::EC2::Subnet
+      Preset: PublicSubnet
+      Title: "Public Subnet AZ2\n10.1.1.0/24"
+
+    ProdNATGW:
+      Type: AWS::EC2::NatGateway
+      Title: "NAT GW"
+
+    ProdALB:
+      Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+      Preset: Application Load Balancer
+      Title: "ALB"
+
+    ProdPrivateSubnets:
+      Type: AWS::Diagram::HorizontalStack
+      Direction: horizontal
+      Children:
+        - ProdPrivateSubnet1
+        - ProdPrivateSubnet2
+
+    ProdPrivateSubnet1:
+      Type: AWS::EC2::Subnet
+      Preset: PrivateSubnet
+      Title: "Private Subnet AZ1\n10.1.100.0/24"
+      Direction: vertical
+      Children:
+        - ECSCluster
+        - AuroraWriter
+
+    ProdPrivateSubnet2:
+      Type: AWS::EC2::Subnet
+      Preset: PrivateSubnet
+      Title: "Private Subnet AZ2\n10.1.101.0/24"
+      Direction: vertical
+      Children:
+        - ECSTask2
+        - AuroraReader
+
+    ECSCluster:
+      Type: AWS::ECS::Cluster
+      Title: "ECS Fargate\nCluster"
+
+    ECSTask2:
+      Type: AWS::ECS::Service
+      Title: "ECS Tasks\n(Auto-scaling)"
+
+    AuroraWriter:
+      Type: AWS::RDS::DBInstance
+      Title: "Aurora\nWriter"
+
+    AuroraReader:
+      Type: AWS::RDS::DBInstance
+      Title: "Aurora\nReader"
+
+    # --------------------------------------------------------------------------
+    # Development VPC (10.2.0.0/16)
+    # --------------------------------------------------------------------------
+    DevVPC:
+      Type: AWS::EC2::VPC
+      Title: "Development VPC\n10.2.0.0/16"
+      Direction: vertical
+      Children:
+        - DevIGW
+        - DevSubnets
+
+    DevIGW:
+      Type: AWS::EC2::InternetGateway
+      Title: "IGW"
+
+    DevSubnets:
+      Type: AWS::Diagram::VerticalStack
+      Direction: vertical
+      Children:
+        - DevPublicSubnet
+        - DevPrivateSubnet
+
+    DevPublicSubnet:
+      Type: AWS::EC2::Subnet
+      Preset: PublicSubnet
+      Title: "Public Subnet\n10.2.0.0/24"
+
+    DevPrivateSubnet:
+      Type: AWS::EC2::Subnet
+      Preset: PrivateSubnet
+      Title: "Private Subnet\n10.2.100.0/24"
+
+    # --------------------------------------------------------------------------
+    # Shared Services VPC (10.3.0.0/16) - Security Inspection
+    # --------------------------------------------------------------------------
+    SharedVPC:
+      Type: AWS::EC2::VPC
+      Title: "Shared Services VPC\n10.3.0.0/16"
+      FillColor: "rgba(255, 153, 0, 20)"
+      Direction: vertical
+      Children:
+        - SharedIGW
+        - SharedSubnets
+
+    SharedIGW:
+      Type: AWS::EC2::InternetGateway
+      Title: "IGW"
+
+    SharedSubnets:
+      Type: AWS::Diagram::VerticalStack
+      Direction: vertical
+      Children:
+        - SharedPublicSubnet
+        - SharedPrivateSubnet
+
+    SharedPublicSubnet:
+      Type: AWS::EC2::Subnet
+      Preset: PublicSubnet
+      Title: "Public Subnet\n10.3.0.0/24"
+
+    SharedPrivateSubnet:
+      Type: AWS::EC2::Subnet
+      Preset: PrivateSubnet
+      Title: "Private Subnet\n10.3.100.0/24"
+      Direction: vertical
+      Children:
+        - GWLB
+        - SuricataASG
+
+    GWLB:
+      Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+      Preset: Gateway Load Balancer
+      Title: "Gateway LB\n(GENEVE 6081)"
+
+    SuricataASG:
+      Type: AWS::AutoScaling::AutoScalingGroup
+      Title: "Suricata IDS\n(2 instances)"
+
+    # --------------------------------------------------------------------------
+    # On-Premises Simulation VPC (10.0.0.0/16)
+    # --------------------------------------------------------------------------
+    OnPremVPC:
+      Type: AWS::EC2::VPC
+      Title: "On-Premises VPC\n10.0.0.0/16"
+      FillColor: "rgba(0, 128, 128, 20)"
+      Direction: vertical
+      Children:
+        - OnPremIGW
+        - OnPremSubnets
+        - OnPremStorage
+
+    OnPremIGW:
+      Type: AWS::EC2::InternetGateway
+      Title: "IGW"
+
+    OnPremSubnets:
+      Type: AWS::Diagram::VerticalStack
+      Direction: vertical
+      Children:
+        - OnPremPublicSubnet
+        - OnPremPrivateSubnet
+
+    OnPremPublicSubnet:
+      Type: AWS::EC2::Subnet
+      Preset: PublicSubnet
+      Title: "Public Subnet\n10.0.0.0/24"
+      Children:
+        - TransferFamily
+
+    TransferFamily:
+      Type: AWS::Diagram::Resource
+      Preset: "AWS Transfer Family"
+      Title: "Transfer Family\nSFTP"
+
+    OnPremPrivateSubnet:
+      Type: AWS::EC2::Subnet
+      Preset: PrivateSubnet
+      Title: "Private Subnet\n10.0.100.0/24"
+      Direction: horizontal
+      Children:
+        - StorageGateway
+        - DataSyncAgent
+
+    StorageGateway:
+      Type: AWS::Diagram::Resource
+      Preset: "AWS Storage Gateway"
+      Title: "Storage\nGateway"
+
+    DataSyncAgent:
+      Type: AWS::DataSync::Agent
+      Title: "DataSync\nAgent"
+
+    OnPremStorage:
+      Type: AWS::Diagram::HorizontalStack
+      Direction: horizontal
+      Children:
+        - S3FileGW
+        - S3DataSync
+        - S3SFTP
+
+    S3FileGW:
+      Type: AWS::S3::Bucket
+      Title: "S3\nFile Gateway"
+
+    S3DataSync:
+      Type: AWS::S3::Bucket
+      Title: "S3\nDataSync"
+
+    S3SFTP:
+      Type: AWS::S3::Bucket
+      Title: "S3\nSFTP"
+
+    # --------------------------------------------------------------------------
+    # Transit Gateway Section
+    # --------------------------------------------------------------------------
+    TransitGatewaySection:
+      Type: AWS::Diagram::HorizontalStack
+      Direction: horizontal
+      Align: center
+      Children:
+        - TGW
+
+    TGW:
+      Type: AWS::EC2::TransitGateway
+      Title: "Transit Gateway\n(Hub)"
+
+    # ==========================================================================
+    # DR REGION (us-west-2)
+    # ==========================================================================
+    DRRegion:
+      Type: AWS::Diagram::Resource
+      Title: "us-west-2 (DR)"
+      Direction: vertical
+      FillColor: "rgba(255, 255, 255, 0)"
+      Children:
+        - DRVPC
+
+    DRVPC:
+      Type: AWS::EC2::VPC
+      Title: "DR VPC\n10.10.0.0/16"
+      FillColor: "rgba(255, 0, 0, 10)"
+      Direction: vertical
+      Children:
+        - DRIGW
+        - DRPublicSubnets
+        - DRPrivateSubnets
+
+    DRIGW:
+      Type: AWS::EC2::InternetGateway
+      Title: "IGW"
+
+    DRPublicSubnets:
+      Type: AWS::EC2::Subnet
+      Preset: PublicSubnet
+      Title: "Public Subnets\n10.10.0.0/24"
+      Direction: horizontal
+      Children:
+        - DRALB
+        - DRNATGW
+
+    DRALB:
+      Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+      Preset: Application Load Balancer
+      Title: "ALB\n(Standby)"
+
+    DRNATGW:
+      Type: AWS::EC2::NatGateway
+      Title: "NAT GW"
+
+    DRPrivateSubnets:
+      Type: AWS::EC2::Subnet
+      Preset: PrivateSubnet
+      Title: "Private Subnets\n10.10.100.0/24"
+      Direction: horizontal
+      Children:
+        - DRECSCluster
+        - DRAurora
+
+    DRECSCluster:
+      Type: AWS::ECS::Cluster
+      Title: "ECS Fargate\n(Standby)"
+
+    DRAurora:
+      Type: AWS::RDS::DBInstance
+      Title: "Aurora\n(Read Replica)"
+
+  # ============================================================================
+  # LINKS (Connections)
+  # ============================================================================
+  Links:
+    # User to Global Services
+    - Source: User
+      SourcePosition: S
+      Target: GlobalAccelerator
+      TargetPosition: N
+      TargetArrowHead:
+        Type: Open
+
+    - Source: Route53
+      SourcePosition: S
+      Target: GlobalAccelerator
+      TargetPosition: NNW
+      LineStyle: dashed
+      TargetArrowHead:
+        Type: Open
+
+    # Global Accelerator to ALBs (Primary)
+    - Source: GlobalAccelerator
+      SourcePosition: S
+      Target: ProdALB
+      TargetPosition: N
+      TargetArrowHead:
+        Type: Open
+
+    # Global Accelerator to ALBs (Failover to DR)
+    - Source: GlobalAccelerator
+      SourcePosition: SSE
+      Target: DRALB
+      TargetPosition: N
+      LineStyle: dashed
+      LineColor: "rgba(255, 0, 0, 200)"
+      TargetArrowHead:
+        Type: Open
+
+    # ALB to ECS
+    - Source: ProdALB
+      SourcePosition: S
+      Target: ECSCluster
+      TargetPosition: N
+      TargetArrowHead:
+        Type: Open
+
+    - Source: ProdALB
+      SourcePosition: SSE
+      Target: ECSTask2
+      TargetPosition: N
+      TargetArrowHead:
+        Type: Open
+
+    # ECS to Aurora (Write)
+    - Source: ECSCluster
+      SourcePosition: S
+      Target: AuroraWriter
+      TargetPosition: N
+      TargetArrowHead:
+        Type: Open
+
+    # ECS to Aurora (Read)
+    - Source: ECSTask2
+      SourcePosition: S
+      Target: AuroraReader
+      TargetPosition: N
+      TargetArrowHead:
+        Type: Open
+
+    # Aurora Replication to DR
+    - Source: AuroraWriter
+      SourcePosition: E
+      Target: DRAurora
+      TargetPosition: W
+      LineStyle: dashed
+      LineColor: "rgba(0, 128, 255, 200)"
+      TargetArrowHead:
+        Type: Open
+
+    # Transit Gateway Connections
+    - Source: ProdVPC
+      SourcePosition: S
+      Target: TGW
+      TargetPosition: NNW
+      TargetArrowHead:
+        Type: Open
+
+    - Source: DevVPC
+      SourcePosition: S
+      Target: TGW
+      TargetPosition: N
+      TargetArrowHead:
+        Type: Open
+
+    - Source: SharedVPC
+      SourcePosition: S
+      Target: TGW
+      TargetPosition: NNE
+      TargetArrowHead:
+        Type: Open
+
+    - Source: OnPremVPC
+      SourcePosition: S
+      Target: TGW
+      TargetPosition: E
+      TargetArrowHead:
+        Type: Open
+
+    # Security Inspection Flow (Prod to GWLB)
+    - Source: ProdVPC
+      SourcePosition: E
+      Target: GWLB
+      TargetPosition: W
+      LineColor: "rgba(255, 153, 0, 200)"
+      TargetArrowHead:
+        Type: Open
+
+    # Security Inspection Flow (Dev to GWLB)
+    - Source: DevVPC
+      SourcePosition: E
+      Target: GWLB
+      TargetPosition: NW
+      LineColor: "rgba(255, 153, 0, 200)"
+      TargetArrowHead:
+        Type: Open
+
+    # GWLB to Suricata
+    - Source: GWLB
+      SourcePosition: S
+      Target: SuricataASG
+      TargetPosition: N
+      LineColor: "rgba(255, 153, 0, 200)"
+      TargetArrowHead:
+        Type: Open
+
+    # Storage Gateway to S3
+    - Source: StorageGateway
+      SourcePosition: S
+      Target: S3FileGW
+      TargetPosition: N
+      LineColor: "rgba(0, 128, 128, 200)"
+      TargetArrowHead:
+        Type: Open
+
+    # DataSync to S3
+    - Source: DataSyncAgent
+      SourcePosition: S
+      Target: S3DataSync
+      TargetPosition: N
+      LineColor: "rgba(0, 128, 128, 200)"
+      TargetArrowHead:
+        Type: Open
+
+    # Transfer Family to S3
+    - Source: TransferFamily
+      SourcePosition: S
+      Target: S3SFTP
+      TargetPosition: N
+      LineColor: "rgba(0, 128, 128, 200)"
+      TargetArrowHead:
+        Type: Open
+
+    # DR ALB to ECS
+    - Source: DRALB
+      SourcePosition: S
+      Target: DRECSCluster
+      TargetPosition: N
+      LineStyle: dashed
+      TargetArrowHead:
+        Type: Open
+
+    # DR ECS to Aurora
+    - Source: DRECSCluster
+      SourcePosition: S
+      Target: DRAurora
+      TargetPosition: N
+      LineStyle: dashed
+      TargetArrowHead:
+        Type: Open
