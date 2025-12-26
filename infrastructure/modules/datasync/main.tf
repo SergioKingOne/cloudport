@@ -5,19 +5,9 @@
 
 data "aws_region" "current" {}
 
-data "aws_ami" "amazon_linux" {
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["al2023-ami-*-x86_64"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
+# Use SSM parameter for official DataSync agent AMI
+data "aws_ssm_parameter" "datasync_ami" {
+  name = "/aws/service/datasync/ami"
 }
 
 ################################################################################
@@ -85,17 +75,72 @@ resource "aws_security_group" "datasync_agent" {
     description = "DataSync service"
   }
 
-  # Agent activation
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Agent activation"
+  # Agent activation (only needed if not using VPC endpoint)
+  dynamic "ingress" {
+    for_each = var.create_vpc_endpoint ? [] : [1]
+    content {
+      from_port   = 80
+      to_port     = 80
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Agent activation"
+    }
   }
 
   tags = merge(var.tags, {
     Name = "${var.name}-datasync-agent-sg"
+  })
+}
+
+################################################################################
+# VPC Endpoint for DataSync (enables private activation)
+################################################################################
+
+data "aws_vpc" "selected" {
+  id = var.vpc_id
+}
+
+resource "aws_security_group" "vpc_endpoint" {
+  count = var.create_vpc_endpoint ? 1 : 0
+
+  name        = "${var.name}-datasync-vpce-sg"
+  description = "Security group for DataSync VPC endpoint"
+  vpc_id      = var.vpc_id
+
+  # HTTPS for DataSync API and data transfer
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [data.aws_vpc.selected.cidr_block]
+    description = "HTTPS"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound"
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.name}-datasync-vpce-sg"
+  })
+}
+
+resource "aws_vpc_endpoint" "datasync" {
+  count = var.create_vpc_endpoint ? 1 : 0
+
+  vpc_id              = var.vpc_id
+  service_name        = "com.amazonaws.${data.aws_region.current.name}.datasync"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = var.vpc_endpoint_subnet_ids
+  security_group_ids  = [aws_security_group.vpc_endpoint[0].id]
+  private_dns_enabled = true
+
+  tags = merge(var.tags, {
+    Name = "${var.name}-datasync-vpce"
   })
 }
 
@@ -137,13 +182,13 @@ resource "aws_iam_instance_profile" "datasync" {
 ################################################################################
 
 resource "aws_instance" "datasync_agent" {
-  ami           = var.agent_ami_id != "" ? var.agent_ami_id : data.aws_ami.amazon_linux.id
+  ami           = var.agent_ami_id != "" ? var.agent_ami_id : data.aws_ssm_parameter.datasync_ami.value
   instance_type = var.agent_instance_type
   subnet_id     = var.agent_subnet_id
 
   vpc_security_group_ids      = [aws_security_group.datasync_agent.id]
   iam_instance_profile        = aws_iam_instance_profile.datasync.name
-  associate_public_ip_address = var.use_public_ip
+  associate_public_ip_address = false
 
   metadata_options {
     http_endpoint               = "enabled"
@@ -167,11 +212,21 @@ resource "aws_instance" "datasync_agent" {
 ################################################################################
 
 resource "aws_datasync_agent" "this" {
-  ip_address = var.use_public_ip ? aws_instance.datasync_agent.public_ip : aws_instance.datasync_agent.private_ip
+  ip_address = aws_instance.datasync_agent.private_ip
   name       = "${var.name}-datasync-agent"
 
+  # VPC endpoint configuration for private activation
+  private_link_endpoint = var.create_vpc_endpoint ? element([for entry in aws_vpc_endpoint.datasync[0].dns_entry : entry.dns_name if !can(regex("\\*", entry.dns_name))], 0) : var.private_link_endpoint
+  vpc_endpoint_id       = var.create_vpc_endpoint ? aws_vpc_endpoint.datasync[0].id : var.vpc_endpoint_id
+  subnet_arns           = var.create_vpc_endpoint ? [for s in var.vpc_endpoint_subnet_ids : "arn:aws:ec2:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:subnet/${s}"] : var.subnet_arns
+  security_group_arns   = var.create_vpc_endpoint ? ["arn:aws:ec2:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:security-group/${aws_security_group.vpc_endpoint[0].id}"] : var.security_group_arns
+
   tags = var.tags
+
+  depends_on = [aws_vpc_endpoint.datasync]
 }
+
+data "aws_caller_identity" "current" {}
 
 ################################################################################
 # IAM Role for DataSync S3 Location

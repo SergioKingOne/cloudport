@@ -47,3 +47,13 @@ output "nfs_mount_command" {
   description = "Command to mount the NFS file share"
   value       = "mount -t nfs -o nolock,hard ${aws_instance.file_gateway.private_ip}:${aws_storagegateway_nfs_file_share.this.path} /mnt/fileshare"
 }
+
+output "vpc_endpoint_id" {
+  description = "ID of the Storage Gateway VPC endpoint"
+  value       = var.create_vpc_endpoint ? aws_vpc_endpoint.storagegateway[0].id : null
+}
+
+output "vpc_endpoint_dns" {
+  description = "DNS name of the Storage Gateway VPC endpoint"
+  value       = var.create_vpc_endpoint ? aws_vpc_endpoint.storagegateway[0].dns_entry[0].dns_name : null
+}

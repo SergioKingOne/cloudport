@@ -5,19 +5,9 @@
 
 data "aws_region" "current" {}
 
-data "aws_ami" "storage_gateway" {
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["aws-storage-gateway-*"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
+# Use SSM parameter for official Storage Gateway AMI
+data "aws_ssm_parameter" "storage_gateway_ami" {
+  name = "/aws/service/storagegateway/ami/FILE_S3/latest"
 }
 
 ################################################################################
@@ -136,13 +126,16 @@ resource "aws_security_group" "file_gateway" {
     description = "SMB"
   }
 
-  # Gateway activation
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Gateway activation"
+  # Gateway activation (only needed if not using VPC endpoint)
+  dynamic "ingress" {
+    for_each = var.create_vpc_endpoint ? [] : [1]
+    content {
+      from_port   = 80
+      to_port     = 80
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Gateway activation"
+    }
   }
 
   egress {
@@ -155,6 +148,83 @@ resource "aws_security_group" "file_gateway" {
 
   tags = merge(var.tags, {
     Name = "${var.name}-file-gateway-sg"
+  })
+}
+
+################################################################################
+# VPC Endpoint for Storage Gateway (enables private activation)
+################################################################################
+
+resource "aws_security_group" "vpc_endpoint" {
+  count = var.create_vpc_endpoint ? 1 : 0
+
+  name        = "${var.name}-sgw-vpce-sg"
+  description = "Security group for Storage Gateway VPC endpoint"
+  vpc_id      = var.vpc_id
+
+  # HTTPS for API calls
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [data.aws_vpc.selected.cidr_block]
+    description = "HTTPS"
+  }
+
+  # Storage Gateway specific ports
+  ingress {
+    from_port   = 1026
+    to_port     = 1028
+    protocol    = "tcp"
+    cidr_blocks = [data.aws_vpc.selected.cidr_block]
+    description = "Storage Gateway data transfer"
+  }
+
+  ingress {
+    from_port   = 1031
+    to_port     = 1031
+    protocol    = "tcp"
+    cidr_blocks = [data.aws_vpc.selected.cidr_block]
+    description = "Storage Gateway management"
+  }
+
+  ingress {
+    from_port   = 2222
+    to_port     = 2222
+    protocol    = "tcp"
+    cidr_blocks = [data.aws_vpc.selected.cidr_block]
+    description = "Storage Gateway support channel"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound"
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.name}-sgw-vpce-sg"
+  })
+}
+
+data "aws_vpc" "selected" {
+  id = var.vpc_id
+}
+
+resource "aws_vpc_endpoint" "storagegateway" {
+  count = var.create_vpc_endpoint ? 1 : 0
+
+  vpc_id              = var.vpc_id
+  service_name        = "com.amazonaws.${data.aws_region.current.name}.storagegateway"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = var.vpc_endpoint_subnet_ids
+  security_group_ids  = [aws_security_group.vpc_endpoint[0].id]
+  private_dns_enabled = true
+
+  tags = merge(var.tags, {
+    Name = "${var.name}-sgw-vpce"
   })
 }
 
@@ -251,13 +321,13 @@ resource "aws_iam_instance_profile" "gateway" {
 }
 
 resource "aws_instance" "file_gateway" {
-  ami           = var.gateway_ami_id != "" ? var.gateway_ami_id : data.aws_ami.storage_gateway.id
+  ami           = var.gateway_ami_id != "" ? var.gateway_ami_id : data.aws_ssm_parameter.storage_gateway_ami.value
   instance_type = var.instance_type
   subnet_id     = var.subnet_id
 
   vpc_security_group_ids      = [aws_security_group.file_gateway.id]
   iam_instance_profile        = aws_iam_instance_profile.gateway.name
-  associate_public_ip_address = var.use_public_ip
+  associate_public_ip_address = false
 
   metadata_options {
     http_endpoint               = "enabled"
@@ -300,14 +370,18 @@ resource "aws_volume_attachment" "cache" {
 ################################################################################
 
 resource "aws_storagegateway_gateway" "file_gateway" {
-  gateway_ip_address = var.use_public_ip ? aws_instance.file_gateway.public_ip : aws_instance.file_gateway.private_ip
-  gateway_name       = "${var.name}-file-gateway"
-  gateway_timezone   = var.timezone
-  gateway_type       = "FILE_S3"
+  gateway_ip_address   = aws_instance.file_gateway.private_ip
+  gateway_name         = "${var.name}-file-gateway"
+  gateway_timezone     = var.timezone
+  gateway_type         = "FILE_S3"
+  gateway_vpc_endpoint = var.create_vpc_endpoint ? aws_vpc_endpoint.storagegateway[0].dns_entry[0].dns_name : var.gateway_vpc_endpoint
 
   tags = var.tags
 
-  depends_on = [aws_volume_attachment.cache]
+  depends_on = [
+    aws_volume_attachment.cache,
+    aws_vpc_endpoint.storagegateway
+  ]
 }
 
 # Configure cache disk

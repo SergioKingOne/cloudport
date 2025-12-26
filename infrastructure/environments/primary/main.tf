@@ -190,7 +190,7 @@ module "storage_gateway" {
   name = local.name
 
   vpc_id    = module.vpc_onprem.vpc_id
-  subnet_id = module.vpc_onprem.public_subnet_ids[0]  # Use public subnet for activation
+  subnet_id = module.vpc_onprem.private_subnet_ids[0]
 
   client_cidrs = [
     module.vpc_onprem.vpc_cidr_block,
@@ -198,7 +198,9 @@ module "storage_gateway" {
     module.vpc_dev.vpc_cidr_block
   ]
 
-  use_public_ip = true  # Enable public IP for Terraform activation
+  # VPC endpoint for private activation (no public IP needed)
+  create_vpc_endpoint     = true
+  vpc_endpoint_subnet_ids = module.vpc_onprem.private_subnet_ids
 
   glacier_ir_transition_days   = 30
   deep_archive_transition_days = 180
@@ -217,11 +219,14 @@ module "datasync" {
   name = local.name
 
   vpc_id          = module.vpc_onprem.vpc_id
-  agent_subnet_id = module.vpc_onprem.public_subnet_ids[0]  # Use public subnet for activation
+  agent_subnet_id = module.vpc_onprem.private_subnet_ids[0]
 
   source_cidrs      = [module.vpc_onprem.vpc_cidr_block]
   create_nfs_source = false # Set to true when NFS server is available
-  use_public_ip     = true  # Enable public IP for Terraform activation
+
+  # VPC endpoint for private activation (no public IP needed)
+  create_vpc_endpoint     = true
+  vpc_endpoint_subnet_ids = module.vpc_onprem.private_subnet_ids
 
   bandwidth_limit_bytes_per_second = 104857600 # 100 MB/s
   schedule_expression              = "cron(0 * * * ? *)"

@@ -60,10 +60,22 @@ variable "timezone" {
   default     = "GMT"
 }
 
-variable "use_public_ip" {
-  description = "Whether to assign a public IP for gateway activation (required when running Terraform outside VPC)"
+variable "create_vpc_endpoint" {
+  description = "Whether to create a VPC endpoint for Storage Gateway (enables private activation)"
   type        = bool
-  default     = false
+  default     = true
+}
+
+variable "vpc_endpoint_subnet_ids" {
+  description = "Subnet IDs for the Storage Gateway VPC endpoint (required if create_vpc_endpoint is true)"
+  type        = list(string)
+  default     = []
+}
+
+variable "gateway_vpc_endpoint" {
+  description = "Existing VPC endpoint DNS name (used if create_vpc_endpoint is false)"
+  type        = string
+  default     = ""
 }
 
 variable "tags" {
