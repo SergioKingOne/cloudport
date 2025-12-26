@@ -73,6 +73,12 @@ variable "log_retention_days" {
   default     = 30
 }
 
+variable "use_public_ip" {
+  description = "Whether to assign a public IP for agent activation (required when running Terraform outside VPC)"
+  type        = bool
+  default     = false
+}
+
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)

@@ -70,6 +70,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "file_gateway" {
     id     = "archive-to-glacier"
     status = "Enabled"
 
+    filter {}
+
     transition {
       days          = var.glacier_ir_transition_days
       storage_class = "GLACIER_IR"
@@ -253,8 +255,9 @@ resource "aws_instance" "file_gateway" {
   instance_type = var.instance_type
   subnet_id     = var.subnet_id
 
-  vpc_security_group_ids = [aws_security_group.file_gateway.id]
-  iam_instance_profile   = aws_iam_instance_profile.gateway.name
+  vpc_security_group_ids      = [aws_security_group.file_gateway.id]
+  iam_instance_profile        = aws_iam_instance_profile.gateway.name
+  associate_public_ip_address = var.use_public_ip
 
   metadata_options {
     http_endpoint               = "enabled"
@@ -297,7 +300,7 @@ resource "aws_volume_attachment" "cache" {
 ################################################################################
 
 resource "aws_storagegateway_gateway" "file_gateway" {
-  gateway_ip_address = aws_instance.file_gateway.private_ip
+  gateway_ip_address = var.use_public_ip ? aws_instance.file_gateway.public_ip : aws_instance.file_gateway.private_ip
   gateway_name       = "${var.name}-file-gateway"
   gateway_timezone   = var.timezone
   gateway_type       = "FILE_S3"

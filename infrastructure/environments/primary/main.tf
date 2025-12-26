@@ -159,15 +159,15 @@ module "security_inspection" {
   gwlb_subnet_ids     = module.vpc_shared.private_subnet_ids
   suricata_subnet_ids = module.vpc_shared.private_subnet_ids
 
-  # Create GWLB endpoints in spoke VPCs
+  # Create GWLB endpoints in spoke VPCs (one subnet per endpoint required)
   gwlb_endpoints = {
     prod = {
       vpc_id     = module.vpc_prod.vpc_id
-      subnet_ids = module.vpc_prod.private_subnet_ids
+      subnet_ids = [module.vpc_prod.private_subnet_ids[0]]
     }
     dev = {
       vpc_id     = module.vpc_dev.vpc_id
-      subnet_ids = module.vpc_dev.private_subnet_ids
+      subnet_ids = [module.vpc_dev.private_subnet_ids[0]]
     }
   }
 
@@ -190,7 +190,7 @@ module "storage_gateway" {
   name = local.name
 
   vpc_id    = module.vpc_onprem.vpc_id
-  subnet_id = module.vpc_onprem.private_subnet_ids[0]
+  subnet_id = module.vpc_onprem.public_subnet_ids[0]  # Use public subnet for activation
 
   client_cidrs = [
     module.vpc_onprem.vpc_cidr_block,
@@ -198,8 +198,10 @@ module "storage_gateway" {
     module.vpc_dev.vpc_cidr_block
   ]
 
+  use_public_ip = true  # Enable public IP for Terraform activation
+
   glacier_ir_transition_days   = 30
-  deep_archive_transition_days = 90
+  deep_archive_transition_days = 180
 
   tags = local.tags
 }
@@ -215,10 +217,11 @@ module "datasync" {
   name = local.name
 
   vpc_id          = module.vpc_onprem.vpc_id
-  agent_subnet_id = module.vpc_onprem.private_subnet_ids[0]
+  agent_subnet_id = module.vpc_onprem.public_subnet_ids[0]  # Use public subnet for activation
 
-  source_cidrs    = [module.vpc_onprem.vpc_cidr_block]
+  source_cidrs      = [module.vpc_onprem.vpc_cidr_block]
   create_nfs_source = false # Set to true when NFS server is available
+  use_public_ip     = true  # Enable public IP for Terraform activation
 
   bandwidth_limit_bytes_per_second = 104857600 # 100 MB/s
   schedule_expression              = "cron(0 * * * ? *)"
@@ -302,7 +305,7 @@ module "aurora" {
   vpc_id     = module.vpc_prod.vpc_id
   subnet_ids = module.vpc_prod.private_subnet_ids
 
-  engine_version = "15.4"
+  engine_version = "16.8"
   database_name  = "app"
 
   min_capacity = var.aurora_min_capacity

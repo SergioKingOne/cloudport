@@ -99,7 +99,7 @@ resource "aws_security_group" "aurora" {
 
 resource "aws_rds_cluster_parameter_group" "this" {
   name        = "${var.name}-aurora-pg-params"
-  family      = "aurora-postgresql15"
+  family      = "aurora-postgresql${split(".", var.engine_version)[0]}"
   description = "Aurora PostgreSQL parameter group"
 
   parameter {

@@ -114,6 +114,12 @@ variable "secondary_alb_arn" {
   default     = ""
 }
 
+variable "create_secondary_resources" {
+  description = "Whether to create secondary (DR) resources - needed because count can't depend on computed values"
+  type        = bool
+  default     = false
+}
+
 # Global Accelerator Configuration
 variable "create_global_accelerator" {
   description = "Create AWS Global Accelerator"

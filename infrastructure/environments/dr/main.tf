@@ -89,7 +89,7 @@ module "aurora_dr" {
   vpc_id     = module.vpc_dr.vpc_id
   subnet_ids = module.vpc_dr.private_subnet_ids
 
-  engine_version = "15.4"
+  engine_version = "16.8"
 
   min_capacity = var.aurora_min_capacity
   max_capacity = var.aurora_max_capacity
@@ -118,9 +118,10 @@ module "dr_routing" {
   name = var.project_name
 
   # Health checks
-  create_health_checks = true
-  primary_endpoint     = var.primary_alb_dns_name
-  secondary_endpoint   = var.enable_dr_app ? module.ecs_fargate_dr[0].alb_dns_name : ""
+  create_health_checks       = true
+  create_secondary_resources = var.enable_dr_app
+  primary_endpoint           = var.primary_alb_dns_name
+  secondary_endpoint         = var.enable_dr_app ? module.ecs_fargate_dr[0].alb_dns_name : ""
 
   # ALB configuration for failover
   primary_alb_dns_name   = var.primary_alb_dns_name

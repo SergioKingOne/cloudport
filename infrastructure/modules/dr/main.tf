@@ -25,7 +25,7 @@ resource "aws_route53_health_check" "primary" {
 }
 
 resource "aws_route53_health_check" "secondary" {
-  count = var.create_health_checks && var.secondary_endpoint != "" ? 1 : 0
+  count = var.create_health_checks && var.create_secondary_resources ? 1 : 0
 
   fqdn              = var.secondary_endpoint
   port              = var.health_check_port
@@ -82,7 +82,7 @@ resource "aws_route53_record" "primary" {
 }
 
 resource "aws_route53_record" "secondary" {
-  count = local.zone_id != "" && var.secondary_alb_dns_name != "" ? 1 : 0
+  count = local.zone_id != "" && var.create_secondary_resources ? 1 : 0
 
   zone_id = local.zone_id
   name    = var.record_name
@@ -99,7 +99,7 @@ resource "aws_route53_record" "secondary" {
   }
 
   set_identifier  = "secondary"
-  health_check_id = var.create_health_checks && var.secondary_endpoint != "" ? aws_route53_health_check.secondary[0].id : null
+  health_check_id = var.create_health_checks && var.create_secondary_resources ? aws_route53_health_check.secondary[0].id : null
 }
 
 ################################################################################
@@ -159,7 +159,7 @@ resource "aws_globalaccelerator_endpoint_group" "primary" {
 }
 
 resource "aws_globalaccelerator_endpoint_group" "secondary" {
-  count = var.create_global_accelerator && var.secondary_alb_arn != "" ? 1 : 0
+  count = var.create_global_accelerator && var.create_secondary_resources ? 1 : 0
 
   listener_arn                  = aws_globalaccelerator_listener.this[0].id
   endpoint_group_region         = var.secondary_region
@@ -205,7 +205,7 @@ resource "aws_cloudwatch_metric_alarm" "primary_health" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "secondary_health" {
-  count = var.create_health_checks && var.secondary_endpoint != "" ? 1 : 0
+  count = var.create_health_checks && var.create_secondary_resources ? 1 : 0
 
   alarm_name          = "${var.name}-secondary-health-alarm"
   comparison_operator = "LessThanThreshold"

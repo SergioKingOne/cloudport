@@ -141,8 +141,9 @@ resource "aws_instance" "datasync_agent" {
   instance_type = var.agent_instance_type
   subnet_id     = var.agent_subnet_id
 
-  vpc_security_group_ids = [aws_security_group.datasync_agent.id]
-  iam_instance_profile   = aws_iam_instance_profile.datasync.name
+  vpc_security_group_ids      = [aws_security_group.datasync_agent.id]
+  iam_instance_profile        = aws_iam_instance_profile.datasync.name
+  associate_public_ip_address = var.use_public_ip
 
   metadata_options {
     http_endpoint               = "enabled"
@@ -166,7 +167,7 @@ resource "aws_instance" "datasync_agent" {
 ################################################################################
 
 resource "aws_datasync_agent" "this" {
-  ip_address = aws_instance.datasync_agent.private_ip
+  ip_address = var.use_public_ip ? aws_instance.datasync_agent.public_ip : aws_instance.datasync_agent.private_ip
   name       = "${var.name}-datasync-agent"
 
   tags = var.tags
